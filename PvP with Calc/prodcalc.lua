@@ -7,7 +7,7 @@ prodcalc = {}
 
 prodcalc.on_init = function(event)
   
-  local use_mods = true -- set to true if you are using mods, then modify the lists below
+  local use_mods = false -- set to true if you are using mods, then modify the lists below
 
   local param = production_score.get_default_param()
   param.seed_prices = add_price_seeds(param.seed_prices, {["used-up-uranium-fuel-cell"] = 30})
