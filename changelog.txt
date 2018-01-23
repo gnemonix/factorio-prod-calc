@@ -1,0 +1,10 @@
+- Version 1.0.4 -- merged in changes from 0.16.17 release
+                 - fixed gui not closing until second click of button on first gui open
+
+- Version 1.0.3 -- fixed that recipe craft time was not correctly factored into score per time calculations
+
+- Version 1.0.2 -- add check to remove orphaned gui elements from center of screen
+
+- Version 1.0.1 -- fixed that the item/fluid checkbox was not working
+
+- Version 1.0   -- initial release
