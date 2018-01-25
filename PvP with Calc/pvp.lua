@@ -10,15 +10,15 @@ function create_spawn_positions()
   local width = config.map_width
   local height = config.map_height
   local displacement = config.average_team_displacement
-  local horizontal_offset = (width/displacement)*10
-  local vertical_offset = (height/displacement)*10
+  local horizontal_offset = (width/displacement) * 10
+  local vertical_offset = (height/displacement) * 10
   global.spawn_offset = {x = math.floor(0.5 + math.random(-horizontal_offset, horizontal_offset) / 32) * 32, y = math.floor(0.5 + math.random(-vertical_offset, vertical_offset) / 32) * 32}
   local height_scale = height/width
-  local radius = starting_area_constant[config.starting_area_size.selected]/32
+  local radius = get_starting_area_radius()
   local count = #global.teams
-  local max_distance = starting_area_constant[config.starting_area_size.selected] + displacement
-  local min_distance = starting_area_constant[config.starting_area_size.selected]/2 + (32*(count-1))
-  local edge_addition = (radius +2)*32
+  local max_distance = get_starting_area_radius(true) * 2 + displacement
+  local min_distance = get_starting_area_radius(true) + (32 * (count - 1))
+  local edge_addition = (radius + 2) * 32
   local elevator_set = false
   if height_scale == 1 then
     if max_distance > width then
@@ -329,6 +329,9 @@ function end_round(admin)
     destroy_player_gui(player)
     destroy_joining_guis(player.gui.center)
     if player.connected then
+      if player.ticks_to_respawn then
+        player.ticks_to_respawn = nil
+      end
       local character = player.character
       player.character = nil
       if character then character.destroy() end
@@ -394,6 +397,17 @@ function set_mode_input(player)
       local dropdown = gui.starting_chest_dropdown
       local name = global.team_config.starting_chest.options[dropdown.selected_index]
       return name ~= "none"
+    end,
+    disband_on_loss = function(gui)
+      local dropdown = gui.game_mode_dropdown
+      if not dropdown then return end
+      local name = global.game_config.game_mode.options[dropdown.selected_index]
+      return name == "conquest" or name == "last_silo_standing"
+    end,
+    give_artillery_remote = function(gui)
+      local option = gui.team_artillery_boolean
+      if not option then return end
+      return option.state
     end
   }
   local gui = get_config_holder(player)
@@ -563,6 +577,9 @@ function set_player(player, team)
     choose_joining_gui(player)
     return
   end
+  if player.character then
+    player.character.destroy()
+  end
   player.force = force
   player.color = get_color(team)
   player.chat_color = get_color(team, true)
@@ -576,8 +593,12 @@ function set_player(player, team)
   for k, other_player in pairs (game.players) do
     update_diplomacy_frame(other_player)
   end
+  if global.game_config.team_artillery and global.game_config.give_artillery_remote and game.item_prototypes["artillery-targeting-remote"] then
+    player.insert("artillery-targeting-remote")
+  end
   give_inventory(player)
   give_equipment(player)
+
   pcall(apply_character_modifiers, player)
 
   game.print({"joined", player.name, player.force.name})
@@ -877,31 +898,29 @@ function toggle_balance_options_gui(player)
     config.style.visible = false
   end
   frame = gui.add{name = "balance_options_frame", type = "frame", direction = "vertical", caption = {"balance-options"}}
+  frame.style.scaleable = false
   frame.style.maximal_height = player.display_resolution.height * 0.95
   frame.style.maximal_width = player.display_resolution.width * 0.95
   local scrollpane = frame.add{name = "balance_options_scrollpane", type = "scroll-pane"}
   local big_table = scrollpane.add{type = "table", column_count = 4, name = "balance_options_big_table", direction = "horizontal"}
   big_table.style.horizontal_spacing = 32
   big_table.draw_vertical_lines = true
+  local entities = game.entity_prototypes
   for modifier_name, array in pairs (global.modifier_list) do
     local flow = big_table.add{type = "frame", name = modifier_name.."_flow", caption = {modifier_name}, style = "inner_frame"}
     local table = flow.add{name = modifier_name.."table", type = "table", column_count = 2}
     table.style.column_alignments[2] = "right"
     for name, modifier in pairs (array) do
-      local label
       if modifier_name == "ammo_damage_modifier" then
         local string = "ammo-category-name."..name
-        label = table.add{name = name.."label", type = "label", caption = {"", {string}, {"colon"}}}
+        table.add{type = "label", caption = {"", {"ammo-category-name."..name}, {"colon"}}}
       elseif modifier_name == "gun_speed_modifier" then
-        local string = "ammo-category-name."..name
-        label = table.add{name = name.."label", type = "label", caption = {"", {string}, {"colon"}}}
+        table.add{type = "label", caption = {"", {"ammo-category-name."..name}, {"colon"}}}
       elseif modifier_name == "turret_attack_modifier" then
-        local string = "entity-name."..name
-        label = table.add{name = name.."label", type = "label", caption = {"", {string}, {"colon"}}}
+        table.add{type = "label", caption = {"", entities[name].localised_name, {"colon"}}}
       elseif modifier_name == "character_modifiers" then
-        label = table.add{name = name.."label", type = "label", caption = {"", {name}, {"colon"}}}
+        table.add{type = "label", caption = {"", {name}, {"colon"}}}
       end
-      --label.style.minimal_width = 200
       local input = table.add{name = name.."text", type = "textfield"}
       input.text = modifier
       input.style.maximal_width = 50
@@ -953,6 +972,10 @@ function set_balance_settings(player)
           local n = tonumber(text)
           if n == nil then
             player.print({"must-be-number", {modifier_name}})
+            return
+          end
+          if n < -1 then
+            player.print({"must-be-greater-than-negative-1", {modifier_name}})
             return
           end
           global.modifier_list[modifier_name][name] = n
@@ -1626,8 +1649,8 @@ end
 
 function chart_starting_area_for_force_spawns()
   local surface = global.surface
-  local size = starting_area_constant[global.map_config.starting_area_size.selected]/2
-  local radius = math.ceil(size/32)
+  local radius = get_starting_area_radius()
+  local size = radius*32
   for k, team in pairs (global.teams) do
     local name = team.name
     local force = game.forces[name]
@@ -1646,7 +1669,7 @@ function check_starting_area_chunks_are_generated()
   if game.tick % (#global.teams) ~= 0 then return end
   local surface = global.surface
   local size = global.map_config.starting_area_size.selected
-  local check_radius = math.ceil(starting_area_constant[size]/64) - 1
+  local check_radius = get_starting_area_radius() - 1
   local total = 0
   local generated = 0
   local width = surface.map_gen_settings.width/2
@@ -1714,8 +1737,7 @@ function check_no_rush()
     game.forces.enemy.kill_all_units()
     return
   end
-  local size = global.map_config.starting_area_size.selected
-  local radius = starting_area_constant[size]/2
+  local radius = get_starting_area_radius(true)
   local surface = global.surface
   for k, player in pairs (game.connected_players) do
     local force = player.force
@@ -1852,8 +1874,7 @@ function finish_setup()
   local force = game.forces[name]
   if not force then return end
   create_silo_for_force(force)
-  local size = global.map_config.starting_area_size.selected
-  local radius = math.ceil(starting_area_constant[size]/2) --[[radius in tiles]]
+  local radius = get_starting_area_radius(true) --[[radius in tiles]]
   if global.game_config.reveal_team_positions then
     for k, other_force in pairs (game.forces) do
       chart_area_for_force(surface, force.get_spawn_position(surface), radius, other_force)
@@ -1862,6 +1883,7 @@ function finish_setup()
   create_wall_for_force(force)
   create_starting_chest(force)
   create_starting_turrets(force)
+  create_starting_artillery(force)
   force.friendly_fire = global.team_config.friendly_fire
   force.share_chart = global.team_config.share_chart
   local hide_crude_recipe_in_stats = global.game_config.game_mode.selected ~= "oil_harvest"
@@ -2012,8 +2034,7 @@ function create_starting_turrets(force)
   local height = global.map_config.map_height/2
   local width = global.map_config.map_width/2
   local origin = force.get_spawn_position(surface)
-  local size = global.map_config.starting_area_size.selected
-  local radius = math.ceil(starting_area_constant[size]/2) - 18 --[[radius in tiles]]
+  local radius = get_starting_area_radius(true) - 18 --[[radius in tiles]]
   local limit = math.min(width - math.abs(origin.x), height - math.abs(origin.y)) - 6
   radius = math.min(radius, limit)
   local positions = {}
@@ -2021,11 +2042,7 @@ function create_starting_turrets(force)
   local Yo = origin.y
   for X = -radius, radius do
     local Xt = X + Xo
-    if (Xt + 16) % 32 ~= 0 and Xt % 8 == 0 then
-      table.insert(positions, {x = Xt, y = Yo - radius, direction = defines.direction.north})
-      table.insert(positions, {x = Xt, y = Yo + radius, direction = defines.direction.south})
-    end
-    if X == -radius or X == radius then
+    if X == -radius then
       for Y = -radius, radius do
         local Yt = Y + Yo
         if (Yt + 16) % 32 ~= 0 and Yt % 8 == 0 then
@@ -2033,6 +2050,9 @@ function create_starting_turrets(force)
           table.insert(positions, {x = Xo + radius, y = Yt, direction = defines.direction.east})
         end
       end
+    elseif (Xt + 16) % 32 ~= 0 and Xt % 8 == 0 then
+      table.insert(positions, {x = Xt, y = Yo - radius, direction = defines.direction.north})
+      table.insert(positions, {x = Xt, y = Yo + radius, direction = defines.direction.south})
     end
   end
   local tiles = {}
@@ -2053,6 +2073,76 @@ function create_starting_turrets(force)
   surface.set_tiles(tiles)
 end
 
+function create_starting_artillery(force)
+  if not global.game_config.team_artillery then return end
+  if not (force and force.valid) then return end
+  local turret_name = "artillery-turret"
+  if not game.entity_prototypes[turret_name] then return end
+  local ammo_name = "artillery-shell"
+  if not game.item_prototypes[ammo_name] then return end
+  local surface = global.surface
+  local height = global.map_config.map_height/2
+  local width = global.map_config.map_width/2
+  local origin = force.get_spawn_position(surface)
+  local size = global.map_config.starting_area_size.selected
+  local radius = get_starting_area_radius() - 1 --[[radius in chunks]]
+  if radius < 1 then return end
+  local positions = {}
+  local tile_positions = {}
+  for x = -radius, 0 do
+    if x == -radius then
+      for y = -radius, 0 do
+        table.insert(positions, {x = 1 + origin.x + 32*x, y = 1 + origin.y + 32*y})
+      end
+    else
+      table.insert(positions, {x = 1 + origin.x + 32*x, y = 1 + origin.y - radius*32})
+    end
+  end
+  for x = 1, radius do
+    if x == radius then
+      for y = -radius, -1 do
+        table.insert(positions, {x = -2 + origin.x + 32*x, y = 1 + origin.y + 32*y})
+      end
+    else
+      table.insert(positions, {x = -2 + origin.x + 32*x, y = 1 + origin.y - radius*32})
+    end
+  end
+  for x = -radius, -1 do
+    if x == -radius then
+      for y = 1, radius do
+        table.insert(positions, {x = 1 + origin.x + 32*x, y = -2 + origin.y + 32*y})
+      end
+    else
+      table.insert(positions, {x = 1 + origin.x + 32*x, y = -2 + origin.y + radius*32})
+    end
+  end
+  for x = 0, radius do
+    if x == radius then
+      for y = 0, radius do
+        table.insert(positions, {x = -2 + origin.x + 32*x, y = -2 + origin.y + 32*y})
+      end
+    else
+      table.insert(positions, {x = -2 + origin.x + 32*x, y = -2 + origin.y + radius*32})
+    end
+  end
+  local stack = {name = ammo_name, count = 20}
+  local tiles = {}
+  local tile_name = "hazard-concrete-left"
+  for k, position in pairs (positions) do
+    local turret = surface.create_entity{name = turret_name, position = position, force = force, direction = position.direction}
+    turret.insert(stack)
+    for k, entity in pairs (surface.find_entities_filtered{area = turret.selection_box, force = "neutral"}) do
+      entity.destroy()
+    end
+    for x = -1, 1 do
+      for y = -1, 1 do
+        table.insert(tiles, {name = tile_name, position = {position.x + x, position.y + y}})
+      end
+    end
+  end
+  surface.set_tiles(tiles)
+end
+
 function create_wall_for_force(force)
   if not global.game_config.team_walls then return end
   if not force.valid then return end
@@ -2061,7 +2151,7 @@ function create_wall_for_force(force)
   local width = global.map_config.map_width/2
   local origin = force.get_spawn_position(surface)
   local size = global.map_config.starting_area_size.selected
-  local radius = math.ceil(starting_area_constant[size]/2) - 13 --[[radius in tiles]]
+  local radius = get_starting_area_radius(true) - 13 --[[radius in tiles]]
   local limit = math.min(width - math.abs(origin.x), height - math.abs(origin.y)) - 1
   radius = math.min(radius, limit)
   local perimeter_top = {}
@@ -2203,8 +2293,7 @@ function duplicate_starting_area_entities()
   if not force then return end
   local surface = global.surface
   local origin_spawn = force.get_spawn_position(surface)
-  local size = global.map_config.starting_area_size.selected
-  local radius = math.ceil(starting_area_constant[size]/2) --[[radius in tiles]]
+  local radius = get_starting_area_radius(true) --[[radius in tiles]]
   local area = {{origin_spawn.x - radius, origin_spawn.y - radius}, {origin_spawn.x + radius, origin_spawn.y + radius}}
   local entities = surface.find_entities_filtered{area = area, force = "neutral"}
   local insert = table.insert
@@ -2282,7 +2371,7 @@ function check_spectator_chart()
   if game.tick % 281 ~= 0 then return end
   local force = game.forces.spectator
   if not (force and force.valid) then return end
-  force.chart_all()
+  force.chart_all(global.surface)
 end
 
 function create_starting_chest(force)
@@ -2327,8 +2416,7 @@ function check_base_exclusion()
   local exclusion_map = global.exclusion_map
   if not exclusion_map then
     exclusion_map = {}
-    local size = global.map_config.starting_area_size.selected
-    local radius = math.ceil(starting_area_constant[size]/64) --[[radius in chunks]]
+    local radius = get_starting_area_radius() --[[radius in chunks]]
     for k, team in pairs (global.teams) do
       local name = team.name
       local force = game.forces[name]
@@ -2370,7 +2458,7 @@ function check_player_exclusion(player, force_name)
   local surface = global.surface
   local origin = force.get_spawn_position(surface)
   local size = global.map_config.starting_area_size.selected
-  local radius = math.ceil(starting_area_constant[size]/2) + 5 --[[radius in tiles]]
+  local radius = get_starting_area_radius(true) + 5 --[[radius in tiles]]
   local position = {x = player.position.x, y = player.position.y}
   local vector = {x = 0, y = 0}
 
@@ -2442,7 +2530,7 @@ function offset_respawn_position(player)
   if not (player and player.valid and player.character) then return end
   local surface = player.surface
   local origin = player.force.get_spawn_position(surface)
-  local radius = math.ceil(starting_area_constant[global.map_config.starting_area_size.selected]/2) - 32
+  local radius = get_starting_area_radius(true) - 32
   if not (radius > 0) then return end
   local random_position = {origin.x + math.random(-radius, radius), origin.y + math.random(-radius, radius)}
   local position = surface.find_non_colliding_position(player.character.name, random_position, 32, 1)
@@ -2450,10 +2538,43 @@ function offset_respawn_position(player)
   player.teleport(position)
 end
 
+function disband_team(force, desination_force)
+  local count = 0
+  for k, team in pairs (global.teams) do
+    if game.forces[team.name] then
+      count = count + 1
+    end
+  end
+  if not (count > 1) then
+    --Can't disband the last team.
+    return
+  end
+  force.print{"join-new-team"}
+  local players = force.players
+  if desination_force and force ~= desination_force then
+    game.merge_forces(force, desination_force)
+  else
+    game.merge_forces(force, "neutral")
+  end
+  for k, player in pairs (players) do
+    player.force = game.forces.player
+    if player.connected then
+      local character = player.character
+      player.character = nil
+      if character then character.destroy() end
+      player.set_controller{type = defines.controllers.ghost}
+      player.teleport({0,1000}, game.surfaces.Lobby)
+      destroy_player_gui(player)
+      choose_joining_gui(player)
+    end
+  end
+end
+
 pvp = {}
 
 pvp.on_init = function()
   load_config()
+  init_balance_modifiers()
   verify_oil_harvest()
   local surface = game.surfaces[1]
   local settings = surface.map_gen_settings
@@ -2504,40 +2625,26 @@ pvp.on_entity_died = function(event)
   local force = silo.force
   if not global.silos then return end
   global.silos[force.name] = nil
-  if not killing_force then
-    killing_force = {}
-    killing_force.name = "neutral"
-  end
-  game.print({"silo-destroyed",force.name, killing_force.name})
-  local index = 0
-  local winner_name = "none"
-  for k, listed_silo in pairs (global.silos) do
-    if listed_silo ~= nil then
-      index = index + 1
-      winner_name = k
-    end
-  end
-  for k, player in pairs (force.players) do
-    player.force = game.forces.player
-    if player.connected then
-      local character = player.character
-      player.character = nil
-      if character then character.destroy() end
-      player.set_controller{type = defines.controllers.ghost}
-      player.teleport({0,1000}, game.surfaces.Lobby)
-      player.print{"join-new-team"}
-      destroy_player_gui(player)
-      choose_joining_gui(player)
-    end
-  end
-  if force.name == killing_force.name then
-    game.merge_forces(force.name, "neutral")
+  if killing_force then
+    game.print({"silo-destroyed", force.name, killing_force.name})
   else
-    game.merge_forces(force.name, killing_force.name)
+    game.print({"silo-destroyed", force.name, {"neutral"}})
   end
-  if index > 1 then return end
+  if global.game_config.disband_on_loss then
+    disband_team(force, killing_force)
+  end
   if not global.team_won then
-    team_won(winner_name)
+    local index = 0
+    local winner_name = {"none"}
+    for name, listed_silo in pairs (global.silos) do
+      if listed_silo ~= nil then
+        index = index + 1
+        winner_name = name
+      end
+    end
+    if index == 1  then
+        team_won(winner_name)
+    end
   end
 end
 
@@ -2676,8 +2783,14 @@ end
 pvp.on_player_respawned = function(event)
   local player = game.players[event.player_index]
   if not (player and player.valid) then return end
-  give_equipment(player)
-  offset_respawn_position(player)
+  if global.setup_finished == true then
+    give_equipment(player)
+    offset_respawn_position(player)
+  else
+    if player.character then
+      player.character.destroy()
+    end
+  end
 end
 
 recursive_data_check = function(new_data, old_data)

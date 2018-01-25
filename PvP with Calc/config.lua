@@ -44,6 +44,7 @@ function load_config(dummy_load)
         "\n", {"oil_harvest_description"}
       }
     },
+    disband_on_loss = false,
     time_limit = 0,
     required_production_score = 50000000,
     required_oil_barrels = 1000,
@@ -56,6 +57,8 @@ function load_config(dummy_load)
     reveal_map_center = false,
     team_walls = true,
     team_turrets = true,
+    team_artillery = false,
+    give_artillery_remote = false,
     auto_new_round_time = 0
   }
 
@@ -294,16 +297,19 @@ function give_equipment(player)
   end
 
 end
-
-starting_area_constant =
-{
-  ["none"] = 128,
-  ["very-low"] = 128,
-  ["low"] = 2*128,
-  ["normal"] = 3*128,
-  ["high"] = 4*128,
-  ["very-high"] = 5*128
-}
+function get_starting_area_radius(as_tiles)
+  if not global.map_config.starting_area_size then return 0 end
+  local starting_area_chunk_radius =
+  {
+    ["none"] = 3,
+    ["very-low"] = 3,
+    ["low"] = 4,
+    ["normal"] = 5,
+    ["high"] = 6,
+    ["very-high"] = 7
+  }
+  return as_tiles and starting_area_chunk_radius[global.map_config.starting_area_size.selected] * 32 or starting_area_chunk_radius[global.map_config.starting_area_size.selected]
+end
 
 function parse_config_from_gui(gui, config)
   local config_table = gui.config_table

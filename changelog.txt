@@ -1,4 +1,8 @@
-- Version 1.0.4 -- merged in changes from 0.16.17 release
+- Version 1.0.5 -- Jan. 25, 2018
+                 - merged in changes from 0.16.19 release
+
+- Version 1.0.4 -- Jan. 22, 2018
+                 - merged in changes from 0.16.17 release
                  - fixed gui not closing until second click of button on first gui open
 
 - Version 1.0.3 -- fixed that recipe craft time was not correctly factored into score per time calculations
