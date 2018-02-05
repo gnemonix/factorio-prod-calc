@@ -5,9 +5,6 @@ function load_config(dummy_load)
   end
 
   config.setup_finished = false
-  config.admin_config = 
-  {
-  }
 
   config.map_config =
   {
@@ -36,7 +33,7 @@ function load_config(dummy_load)
       tooltip = 
       {
         "", {"game_mode_tooltip"},
-        "\n",{"conquest_description"},
+        "\n", {"conquest_description"},
         "\n", {"space_race_description"},
         "\n", {"last_silo_standing_description"},
         "\n", {"freeplay_description"},
@@ -57,10 +54,39 @@ function load_config(dummy_load)
     reveal_map_center = false,
     team_walls = true,
     team_turrets = true,
+    turret_ammunition =
+    {
+      options = {"firearm-magazine"},
+      selected = "firearm-magazine"
+    },
     team_artillery = false,
     give_artillery_remote = false,
     auto_new_round_time = 0
   }
+
+  local entity_name = "gun-turret"
+  local prototype = game.entity_prototypes[entity_name]
+  if not prototype then
+    config.game_config.team_turrets = nil
+    config.game_config.turret_ammunition = nil
+  else
+    local category = prototype.attack_parameters.ammo_category
+    if category then
+      local ammos = {}
+      for name, item in pairs (game.item_prototypes) do
+        if item.type == "ammo" then
+          local ammo = item.get_ammo_type()
+          if ammo and ammo.category == category then
+            table.insert(ammos, name)
+          end
+        end
+      end
+      config.game_config.turret_ammunition.options = ammos
+      if not game.item_prototypes["firearm-magazine"] then
+        config.game_config.turret_ammunition.selected = ammos[1] or ""
+      end
+    end
+  end
 
   config.team_config =
   {
@@ -113,17 +139,21 @@ function load_config(dummy_load)
 
   config.colors =
   {
-    {name = "Blue", color = {0.2, 0.2, 0.8, 0.7}},
-    {name = "Green", color = {0.1, 0.8, 0.1, 0.8}},
-    {name = "Purple", color = {0.8, 0.2, 0.8, 0.9}},
-    {name = "Yellow", color = {0.8, 0.8, 0.0, 0.6}},
-    {name = "Cyan", color = {0.1, 0.9, 0.9, 0.8}},
-    {name = "Orange", color = {0.8, 0.4, 0.0, 0.8}},
-    {name = "Pink", color = {0.8, 0.2, 0.8, 0.2}},
-    {name = "White", color = {0.8, 0.8, 0.8, 0.5}},
-    {name = "Black", color = {0.1, 0.1, 0.1, 0.8}},
-    {name = "Gray", color = {0.6, 0.6, 0.6, 0.8}}
+    { name = "red"    , color = { r = 0.815, g = 0.024, b = 0.0  , a = 0.5 }},
+    { name = "green"  , color = { r = 0.093, g = 0.768, b = 0.172, a = 0.5 }},
+    { name = "blue"   , color = { r = 0.155, g = 0.540, b = 0.898, a = 0.5 }},
+    { name = "orange" , color = { r = 0.869, g = 0.5  , b = 0.130, a = 0.5 }},
+    { name = "yellow" , color = { r = 0.835, g = 0.666, b = 0.077, a = 0.5 }},
+    { name = "pink"   , color = { r = 0.929, g = 0.386, b = 0.514, a = 0.5 }},
+    { name = "purple" , color = { r = 0.485, g = 0.111, b = 0.659, a = 0.5 }},
+    { name = "white"  , color = { r = 0.8  , g = 0.8  , b = 0.8  , a = 0.5 }},
+    { name = "black"  , color = { r = 0.1  , g = 0.1  , b = 0.1,   a = 0.5 }},
+    { name = "gray"   , color = { r = 0.4  , g = 0.4  , b = 0.4,   a = 0.5 }},
+    { name = "brown"  , color = { r = 0.300, g = 0.117, b = 0.0,   a = 0.5 }},
+    { name = "cyan"   , color = { r = 0.275, g = 0.755, b = 0.712, a = 0.5 }},
+    { name = "acid"   , color = { r = 0.559, g = 0.761, b = 0.157, a = 0.5 }},
   }
+  
 
   config.color_map = {}
   for k, color in pairs (config.colors) do
@@ -132,8 +162,8 @@ function load_config(dummy_load)
 
   config.teams =
   {
-    {name = "Green 1", color = "Green", team = "-"},
-    {name = "Purple 2", color = "Purple", team = "-"}
+    {name = "Orange", color = "orange", team = "-"},
+    {name = "Purple", color = "purple", team = "-"}
   }
 
   config.inventory_list =
@@ -369,7 +399,6 @@ function make_config_table(gui, config)
     else
       label = config_table.add{type = "label", name = k, tooltip = {k.."_tooltip"}}
       local menu = config_table.add{type = "drop-down", name = k.."_dropdown"}
-      menu.style.maximal_width = 150
       local index
       for j, option in pairs (name.options) do
         if items[option] then

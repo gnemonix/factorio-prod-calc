@@ -83,8 +83,8 @@ function init_balance_modifiers()
     "melee",
     "railgun",
     "grenade",
-    "fluid",
-    "artillery-shell"
+    "artillery-shell",
+    "landmine"
   }
   for k, name in pairs (categories) do
     modifier_list.ammo_damage_modifier[name] = 0

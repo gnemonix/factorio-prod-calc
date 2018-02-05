@@ -82,3 +82,11 @@ end)
 script.on_event(defines.events.on_player_display_resolution_changed, function(event)
   pvp.on_player_display_resolution_changed(event)
 end)
+
+script.on_event(defines.events.on_research_finished, function(event)
+  pvp.on_research_finished(event)
+end)
+
+script.on_event(defines.events.on_player_cursor_stack_changed, function(event)
+  pvp.on_player_cursor_stack_changed(event)
+end)

@@ -9,7 +9,7 @@ function create_spawn_positions()
   local config = global.map_config
   local width = config.map_width
   local height = config.map_height
-  local displacement = config.average_team_displacement
+  local displacement = math.max(config.average_team_displacement, 64)
   local horizontal_offset = (width/displacement) * 10
   local vertical_offset = (height/displacement) * 10
   global.spawn_offset = {x = math.floor(0.5 + math.random(-horizontal_offset, horizontal_offset) / 32) * 32, y = math.floor(0.5 + math.random(-vertical_offset, vertical_offset) / 32) * 32}
@@ -98,6 +98,7 @@ function create_spawn_positions()
     position.y = position.y + global.spawn_offset.y
   end
   global.spawn_positions = positions
+  --error(serpent.block(positions))
   return positions
 end
 
@@ -112,10 +113,10 @@ function create_next_surface()
   if global.map_config.biters_disabled then
     settings.autoplace_controls["enemy-base"].size = "none"
   end
-  if global.map_config.seed ~= 0 then
+  if global.map_config.map_seed == 0 then
     settings.seed = math.random(4000000000)
   else
-    settings.seed = global.map_config.seed
+    settings.seed = global.map_config.map_seed
   end
   settings.height = global.map_config.map_height
   settings.width = global.map_config.map_width
@@ -173,7 +174,7 @@ function make_color_dropdown(k, gui)
   local menu = gui.add{type = "drop-down", name = k.."_color"}
   local count = 1
   for k, color in pairs (global.colors) do
-    menu.add_item({color.name})
+    menu.add_item({"color."..color.name})
     if color.name == team.color then
       menu.selected_index = count
     end
@@ -184,7 +185,8 @@ end
 function add_team_to_team_table(gui, k)
   local team = global.teams[k]
   local textfield = gui.add{type = "textfield", name = k, text = team.name}
-  textfield.style.maximal_width = 100
+  textfield.style.minimal_width = 0
+  textfield.style.horizontally_stretchable = true
   make_color_dropdown(k, gui)
   local caption
   if tonumber(team.team) then
@@ -408,6 +410,11 @@ function set_mode_input(player)
       local option = gui.team_artillery_boolean
       if not option then return end
       return option.state
+    end,
+    turret_ammunition = function(gui)
+      local option = gui.team_turrets_boolean
+      if not option then return end
+      return option.state
     end
   }
   local gui = get_config_holder(player)
@@ -460,9 +467,9 @@ end
 function get_color(team, lighten)
   local c = global.colors[global.color_map[team.color]].color
   if lighten then
-    return {r = 1 - (1 - c[1]) * 0.5, g = 1 - (1 - c[2]) * 0.5, b = 1 - (1 - c[3]) * 0.5, a = 1}
+    return {r = 1 - (1 - c.r) * 0.5, g = 1 - (1 - c.g) * 0.5, b = 1 - (1 - c.b) * 0.5, a = 1}
   end
-  return {r = fpn(c[1]), g = fpn(c[2]), b = fpn(c[3]), a = fpn(c[4])}
+  return {r = fpn(c.r), g = fpn(c.g), b = fpn(c.b), a = fpn(c.a)}
 end
 
 function add_player_list_gui(force, gui)
@@ -746,7 +753,7 @@ function add_team_button_press(event)
     return
   end
   local color = global.colors[(1+index%(#global.colors))]
-  local name = color.name.." "..index
+  local name = game.backer_names[math.random(#game.backer_names)]
   local team = {name = name, color = color.name, team = "-"}
   global.teams[index] = team
   for k, player in pairs (game.players) do
@@ -1543,6 +1550,22 @@ function disable_items_for_all()
   end
 end
 
+function check_technology_for_disabled_items(event)
+  if not global.disabled_items then return end
+  local disabled_items = global.disabled_items
+  local technology = event.research
+  local recipes = technology.force.recipes
+  for k, effect in pairs (technology.effects) do
+    if effect.type == "unlock-recipe" then
+      for k, product in pairs (recipes[effect.recipe].products) do
+        if disabled_items[product.name] then
+          recipes[effect.recipe].enabled = false
+        end
+      end
+    end
+  end
+end
+
 function set_random_team(team)
   if tonumber(team.team) then return end
   if team.team == "-" then return end
@@ -2028,7 +2051,7 @@ function create_starting_turrets(force)
   if not (force and force.valid) then return end
   local turret_name = "gun-turret"
   if not game.entity_prototypes[turret_name] then return end
-  local ammo_name = "firearm-magazine"
+  local ammo_name = global.game_config.turret_ammunition.selected or "firearm-magazine"
   if not game.item_prototypes[ammo_name] then return end
   local surface = global.surface
   local height = global.map_config.map_height/2
@@ -2258,7 +2281,8 @@ function oil_harvest_prune_oil(event)
   if not global.game_config.oil_only_in_center then return end
   local area = event.area
   local center = {x = (area.left_top.x + area.right_bottom.x) / 2, y = (area.left_top.y + area.right_bottom.y) / 2}
-  local distance_from_center = (center.x*center.x + center.y*center.y)^0.5
+  local origin = global.spawn_offset
+  local distance_from_center = (((center.x - origin.x) ^ 2) + ((center.y - origin.y) ^ 2)) ^ 0.5
   if distance_from_center > global.map_config.average_team_displacement/2.5 then
     for k, entity in pairs (event.surface.find_entities_filtered{area = area, name = "crude-oil"}) do
       entity.destroy()
@@ -2570,6 +2594,28 @@ function disband_team(force, desination_force)
   end
 end
 
+recursive_data_check = function(new_data, old_data)
+  for k, data in pairs (new_data) do
+    if not old_data[k] then
+      old_data[k] = data
+    elseif type(data) == "table" then
+      recursive_data_check(new_data[k], old_data[k])
+    end
+  end
+end
+
+check_cursor_for_disabled_items = function(event)
+  if not global.disabled_items then return end
+  local player = game.players[event.player_index]
+  if not (player and player.valid) then return end
+  local stack = player.cursor_stack
+  if (stack and stack.valid_for_read) then
+    if global.disabled_items[stack.name] then
+      stack.clear()
+    end
+  end
+end
+
 pvp = {}
 
 pvp.on_init = function()
@@ -2786,19 +2832,10 @@ pvp.on_player_respawned = function(event)
   if global.setup_finished == true then
     give_equipment(player)
     offset_respawn_position(player)
+    pcall(apply_character_modifiers, player)
   else
     if player.character then
       player.character.destroy()
-    end
-  end
-end
-
-recursive_data_check = function(new_data, old_data)
-  for k, data in pairs (new_data) do
-    if not old_data[k] then
-      old_data[k] = data
-    elseif type(data) == "table" then
-      recursive_data_check(new_data[k], old_data[k])
     end
   end
 end
@@ -2814,6 +2851,14 @@ end
 pvp.on_player_display_resolution_changed = function(event)
   check_config_frame_size(event)
   check_balance_frame_size(event)
+end
+
+pvp.on_research_finished = function(event)
+  check_technology_for_disabled_items(event)
+end
+
+pvp.on_player_cursor_stack_changed = function(event)
+  check_cursor_for_disabled_items(event)
 end
 
 return pvp
