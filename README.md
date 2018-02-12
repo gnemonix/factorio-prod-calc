@@ -4,7 +4,7 @@ A Factorio scenario (PvP) with an in-game production score calculator gui
 Latest changes:
 
 * Version 1.0.6 -- Feb. 12, 2018
-  * Merged in changes from 0.16.22 release
+  * Merged in changes from 0.16.22 release/n
     key changes:
     * refactored config stuff
     * refactored wall stuff generation
