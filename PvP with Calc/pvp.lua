@@ -132,7 +132,7 @@ function destroy_player_gui(player)
     {
       "objective_button", "diplomacy_button", "admin_button",
       "silo_gui_sprite_button", "production_score_button", "oil_harvest_button",
-      "production_score_calculator_button"
+      "space_race_button", "production_score_calculator_button"
     }) do
     if button_flow[name] then
       button_flow[name].destroy()
@@ -143,7 +143,7 @@ function destroy_player_gui(player)
     {
       "objective_frame", "admin_button", "admin_frame",
       "silo_gui_frame", "production_score_frame", "oil_harvest_frame",
-      "calc_gui"
+      "space_race_frame", "calc_gui"
     }) do
     if frame_flow[name] then
       frame_flow[name].destroy()
@@ -354,17 +354,16 @@ function end_round(admin)
   global.average_deltas = nil
 end
 
-function prepare_map()
+function prepare_next_round()
+  global.setup_finished = false
+  global.team_won = false
+  global.oil_harvest_scores = nil
+  global.production_scores = nil
+  global.space_race_scores = nil
   create_next_surface()
   setup_teams()
   chart_starting_area_for_force_spawns()
   set_evolution_factor()
-end
-
-function prepare_next_round()
-  global.setup_finished = false
-  global.team_won = false
-  prepare_map()
 end
 
 function set_mode_input(player)
@@ -415,7 +414,13 @@ function set_mode_input(player)
       local option = gui.team_turrets_boolean
       if not option then return end
       return option.state
-    end
+    end,
+    required_satellites_sent = function(gui)
+      local dropdown = gui.game_mode_dropdown
+      if not dropdown then return end
+      local name = global.game_config.game_mode.options[dropdown.selected_index]
+      return name == "space_race"
+    end,
   }
   local gui = get_config_holder(player)
   for k, frame in pairs ({gui.map_config_gui, gui.game_config_gui, gui.team_config_gui}) do
@@ -439,7 +444,8 @@ end
 
 game_mode_buttons = {
   ["production_score"] = {type = "button", caption = {"production_score"}, name = "production_score_button", style = mod_gui.button_style},
-  ["oil_harvest"] = {type = "button", caption = {"oil_harvest"}, name = "oil_harvest_button", style = mod_gui.button_style}
+  ["oil_harvest"] = {type = "button", caption = {"oil_harvest"}, name = "oil_harvest_button", style = mod_gui.button_style},
+  ["space_race"] = {type = "button", caption = {"space_race"}, name = "space_race_button", style = mod_gui.button_style}
 }
 
 function init_player_gui(player)
@@ -603,10 +609,9 @@ function set_player(player, team)
   if global.game_config.team_artillery and global.game_config.give_artillery_remote and game.item_prototypes["artillery-targeting-remote"] then
     player.insert("artillery-targeting-remote")
   end
-  give_inventory(player)
   give_equipment(player)
 
-  pcall(apply_character_modifiers, player)
+  apply_character_modifiers(player)
 
   game.print({"joined", player.name, player.force.name})
 end
@@ -634,7 +639,8 @@ function choose_joining_gui(player)
 end
 
 function add_join_spectator_button(gui)
-  if not global.game_config.allow_spectators then return end
+  local player = game.players[gui.player_index]
+  if (not global.game_config.allow_spectators) and (not player.admin) then return end
   set_button_style(gui.add{type = "button", name = "join_spectator", caption = {"join-spectator"}})
 end
 
@@ -913,6 +919,7 @@ function toggle_balance_options_gui(player)
   big_table.style.horizontal_spacing = 32
   big_table.draw_vertical_lines = true
   local entities = game.entity_prototypes
+  local ammos = game.ammo_category_prototypes
   for modifier_name, array in pairs (global.modifier_list) do
     local flow = big_table.add{type = "frame", name = modifier_name.."_flow", caption = {modifier_name}, style = "inner_frame"}
     local table = flow.add{name = modifier_name.."table", type = "table", column_count = 2}
@@ -920,9 +927,9 @@ function toggle_balance_options_gui(player)
     for name, modifier in pairs (array) do
       if modifier_name == "ammo_damage_modifier" then
         local string = "ammo-category-name."..name
-        table.add{type = "label", caption = {"", {"ammo-category-name."..name}, {"colon"}}}
+        table.add{type = "label", caption = {"", ammos[name].localised_name, {"colon"}}}
       elseif modifier_name == "gun_speed_modifier" then
-        table.add{type = "label", caption = {"", {"ammo-category-name."..name}, {"colon"}}}
+        table.add{type = "label", caption = {"", ammos[name].localised_name, {"colon"}}}
       elseif modifier_name == "turret_attack_modifier" then
         table.add{type = "label", caption = {"", entities[name].localised_name, {"colon"}}}
       elseif modifier_name == "character_modifiers" then
@@ -946,7 +953,6 @@ function create_disable_frame(gui)
     gui.disable_items_frame.clear()
   else
     frame = gui.add{name = "disable_items_frame", type = "frame", direction = "vertical", style = "inner_frame"}
-    --frame.style.horizontally_stretchable = true
   end
   local label = frame.add{type = "label", caption = {"", {"disabled-items"}, {"colon"}}}
   local disable_table = frame.add{type = "table", name = "disable_items_table", column_count = 7}
@@ -1122,9 +1128,10 @@ function admin_button_press(event)
     flow.admin_frame.style.visible = not flow.admin_frame.style.visible
     return
   end
-  local frame = flow.add{type = "frame", caption = {"admin"}, name = "admin_frame"}
+  local frame = flow.add{type = "frame", caption = {"admin"}, name = "admin_frame", direction = "vertical"}
   frame.style.visible = true
   set_button_style(frame.add{type = "button", caption = {"end-round"}, name = "admin_end_round", tooltip = {"end-round-tooltip"}})
+  set_button_style(frame.add{type = "button", caption = {"reroll-round"}, name = "admin_reroll_round", tooltip = {"reroll-round-tooltip"}})
 end
 
 function admin_frame_button_press(event)
@@ -1141,6 +1148,13 @@ function admin_frame_button_press(event)
   end
   if gui.name == "admin_end_round" then
     end_round(player)
+    return
+  end
+  if gui.name == "admin_reroll_round" then
+    end_round()
+    destroy_config_for_all()
+    prepare_next_round()
+    return
   end
 end
 
@@ -1322,6 +1336,83 @@ function update_oil_harvest_frame(player)
       information_table.add{type = "label", caption = util.format_number(score)}
       rank = rank + 1
     end
+  end
+end
+
+function space_race_button_press(event)
+  local gui = event.element
+  if not gui.valid then return end
+  if gui.name ~= "space_race_button" then return end
+  local player = game.players[event.player_index]
+  local flow = mod_gui.get_frame_flow(player)
+  local frame = flow.space_race_frame
+  if frame then
+    frame.destroy()
+    return
+  end
+  frame = flow.add{type = "frame", name = "space_race_frame", caption = {"space_race"}, direction = "vertical"}
+  frame.style.title_bottom_padding = 8
+  if global.game_config.required_satellites_sent > 0 then
+    frame.add{type = "label", caption = {"", {"required_satellites_sent"}, {"colon"}, " ", util.format_number(global.game_config.required_satellites_sent)}}
+  end
+  local inner_frame = frame.add{type = "frame", style = "image_frame", name = "space_race_inner_frame", direction = "vertical"}
+  inner_frame.style.left_padding = 8
+  inner_frame.style.top_padding = 8
+  inner_frame.style.right_padding = 8
+  inner_frame.style.bottom_padding = 8
+  update_space_race_frame(player)
+end
+
+function update_space_race_frame(player)
+  local gui = mod_gui.get_frame_flow(player)
+  local frame = gui.space_race_frame
+  if not frame then return end
+  inner_frame = frame.space_race_inner_frame
+  if not inner_frame then return end
+  inner_frame.clear()
+  local information_table = inner_frame.add{type = "table", column_count = 4}
+  information_table.draw_horizontal_line_after_headers = true
+  information_table.draw_vertical_lines = true
+  information_table.style.horizontal_spacing = 16
+  information_table.style.vertical_spacing = 8
+  information_table.style.column_alignments[4] = "right"
+
+  for k, caption in pairs ({"", "team-name", "rocket_parts", "satellites_sent"}) do
+    local label = information_table.add{type = "label", caption = {caption}}
+    label.style.font = "default-bold"
+  end
+  local colors = {}
+  for k, team in pairs (global.teams) do
+    colors[team.name] = get_color(team, true)
+  end
+  local rank = 1
+
+  for name, score in spairs (global.space_race_scores, function(t, a, b) return t[b] < t[a] end) do
+    local position = information_table.add{type = "label", caption = "#"..rank}
+    if name == player.force.name then
+      position.style.font = "default-semibold"
+      position.style.font_color = {r = 1, g = 1}
+    end
+    local label = information_table.add{type = "label", caption = name}
+    label.style.font = "default-semibold"
+    label.style.font_color = colors[name]
+    local progress = information_table.add{type = "progressbar", value = 1}
+    progress.style.width = 0
+    progress.style.horizontally_squashable = true
+    progress.style.horizontally_stretchable = true
+    progress.style.color = colors[name]
+    local silo = global.silos[name]
+    if silo and silo.valid then
+      if silo.get_inventory(defines.inventory.rocket_silo_rocket) then
+        progress.value = 1
+      else
+        progress.value = silo.rocket_parts / silo.prototype.rocket_parts_required
+      end
+    else
+      progress.style.visible = false
+    end
+    information_table.add{type = "label", caption = util.format_number(score)}
+    rank = rank + 1
   end
 end
 
@@ -1515,7 +1606,10 @@ function setup_teams()
     setup_research(force)
     disable_combat_technologies(force)
     force.reset_technology_effects()
-    pcall(apply_combat_modifiers, force)
+    apply_combat_modifiers(force)
+    if global.team_config.starting_equipment.selected == "large" then
+      force.worker_robots_speed_modifier = 2.5
+    end
   end
   disable_items_for_all()
 end
@@ -1823,7 +1917,7 @@ function check_update_production_score()
   global.production_scores = new_scores
   global.previous_deltas = old_deltas
   global.average_deltas = average_deltas
-  for k, player in pairs (game.players) do
+  for k, player in pairs (game.connected_players) do
     update_production_score_frame(player)
   end
   local required = global.game_config.required_production_score
@@ -1860,7 +1954,7 @@ function check_update_oil_harvest_score()
     scores[force_name] = input - output
   end
   global.oil_harvest_scores = scores
-  for k, player in pairs (game.players) do
+  for k, player in pairs (game.connected_players) do
     update_oil_harvest_frame(player)
   end
   local required = global.game_config.required_oil_barrels
@@ -1881,6 +1975,32 @@ function check_update_oil_harvest_score()
       end
     end
     team_won(winner)
+  end
+end
+
+function check_update_space_race_score()
+  if global.game_config.game_mode.selected ~= "space_race" then return end
+  if game.tick % 60 ~= 0 then return end
+  local item_to_check = "satellite"
+  if not game.item_prototypes[item_to_check] then error("Playing space race when satellites don't exist") end
+  local scores = {}
+  for k, team in pairs (global.teams) do
+    local force = game.forces[team.name]
+    if force then
+      scores[team.name] = force.get_item_launched(item_to_check)
+    end
+  end
+  global.space_race_scores = scores
+  for k, player in pairs (game.connected_players) do
+    update_space_race_frame(player)
+  end
+  local required = global.game_config.required_satellites_sent
+  if required > 0 then
+    for team_name, score in pairs (global.space_race_scores) do
+      if score >= required then
+        team_won(team_name)
+      end
+    end
   end
 end
 
@@ -1951,14 +2071,13 @@ function final_setup_step()
       force.chart(surface, area)
     end
   end
+  global.space_race_scores = {}
+  global.oil_harvest_scores = {}
+  global.production_scores = {}
 end
 
 function chart_area_for_force(surface, origin, radius, force)
   if not force.valid then return end
-  if (not origin.x) or (not origin.y) then
-    game.print ("No valid value in position array")
-    return
-  end
   local area = {{origin.x - radius, origin.y - radius}, {origin.x + (radius - 32), origin.y + (radius - 32)}}
   force.chart(surface, area)
 end
@@ -2000,26 +2119,34 @@ function create_silo_for_force(force)
   local origin = force.get_spawn_position(surface)
   local offset_x = 0
   local offset_y = -25
-  local silo_position = {origin.x+offset_x, origin.y+offset_y}
-  local area = {{silo_position[1]-5,silo_position[2]-6},{silo_position[1]+6, silo_position[2]+6}}
+  local silo_position = {x = origin.x+offset_x, y = origin.y+offset_y}
+  local area = {{silo_position.x - 5, silo_position.y - 6}, {silo_position.x + 6, silo_position.y + 6}}
   for i, entity in pairs(surface.find_entities_filtered({area = area, force = "neutral"})) do
     entity.destroy()
   end
-  local silo = surface.create_entity{name = "rocket-silo", position = silo_position, force = force}
+
+  local silo_name = "rocket-silo"
+  if not game.entity_prototypes[silo_name] then log("Silo not created as "..silo_name.." is not a valid entity prototype") return end
+  local silo = surface.create_entity{name = silo_name, position = silo_position, force = force}
   silo.minable = false
   silo.backer_name = tostring(force.name)
-  local tiles_1 = {}
+
+  if global.game_config.game_mode.selected == "space_race" then
+    silo.destructible = false
+  end
+  if not global.silos then global.silos = {} end
+  global.silos[force.name] = silo
+
+  local tile_name = "hazard-concrete-left"
+  if not game.tile_prototypes[tile_name] then log("Silo tiles not set as "..tile_name.." is not a valid tile prototype") return end
+
   local tiles_2 = {}
   for X = -5, 5 do
     for Y = -6, 5 do
-      table.insert(tiles_2, {name = "hazard-concrete-left", position = {silo_position[1]+X, silo_position[2]+Y}})
+      table.insert(tiles_2, {name = tile_name, position = {silo_position.x + X, silo_position.y + Y}})
     end
   end
   surface.set_tiles(tiles_2)
-  if global.game_config.game_mode.selected ~= "space_race" then
-    if not global.silos then global.silos = {} end
-    global.silos[force.name] = silo
-  end
 end
 
 function setup_research(force)
@@ -2209,40 +2336,51 @@ function create_wall_for_force(force)
       entity.destroy()
     end
   end
+  local wall_name = "stone-wall"
+  local gate_name = "gate"
+  if not game.entity_prototypes[wall_name] then
+    log("Setting walls cancelled as "..wall_name.." is not a valid entity prototype")
+    return
+  end
+  if not game.entity_prototypes[gate_name] then
+    log("Setting walls cancelled as "..gate_name.." is not a valid entity prototype")
+    return
+  end
+
   for k, position in pairs (perimeter_left) do
     insert(tiles, {name = tile_name, position = {position[1],position[2]}})
     insert(tiles, {name = tile_name, position = {position[1]+1,position[2]}})
     if (position[2] % 32 == 14) or (position[2] % 32 == 15) or (position[2] % 32 == 16) or (position[2] % 32 == 17) then
-      surface.create_entity{name = "gate", position = {position[1],position[2]}, direction = 0, force = force}
+      surface.create_entity{name = gate_name, position = {position[1],position[2]}, direction = 0, force = force}
     else
-      surface.create_entity{name = "stone-wall", position = {position[1],position[2]}, force = force}
+      surface.create_entity{name = wall_name, position = {position[1],position[2]}, force = force}
     end
   end
   for k, position in pairs (perimeter_right) do
     insert(tiles, {name = tile_name, position = {position[1]-1,position[2]}})
     insert(tiles, {name = tile_name, position = {position[1],position[2]}})
     if (position[2] % 32 == 14) or (position[2] % 32 == 15) or (position[2] % 32 == 16) or (position[2] % 32 == 17) then
-      surface.create_entity{name = "gate", position = {position[1],position[2]}, direction = 0, force = force}
+      surface.create_entity{name = gate_name, position = {position[1],position[2]}, direction = 0, force = force}
     else
-      surface.create_entity{name = "stone-wall", position = {position[1],position[2]}, force = force}
+      surface.create_entity{name = wall_name, position = {position[1],position[2]}, force = force}
     end
   end
   for k, position in pairs (perimeter_top) do
     insert(tiles, {name = tile_name, position = {position[1],position[2]}})
     insert(tiles, {name = tile_name, position = {position[1],position[2]+1}})
     if (position[1] % 32 == 14) or (position[1] % 32 == 15) or (position[1] % 32 == 16) or (position[1] % 32 == 17) then
-      surface.create_entity{name = "gate", position = {position[1],position[2]}, direction = 2, force = force}
+      surface.create_entity{name = gate_name, position = {position[1],position[2]}, direction = 2, force = force}
     else
-      surface.create_entity{name = "stone-wall", position = {position[1],position[2]}, force = force}
+      surface.create_entity{name = wall_name, position = {position[1],position[2]}, force = force}
     end
   end
   for k, position in pairs (perimeter_bottom) do
     insert(tiles, {name = tile_name, position = {position[1],position[2]-1}})
     insert(tiles, {name = tile_name, position = {position[1],position[2]}})
     if (position[1] % 32 == 14) or (position[1] % 32 == 15) or (position[1] % 32 == 16) or (position[1] % 32 == 17) then
-      surface.create_entity{name = "gate", position = {position[1],position[2]}, direction = 2, force = force}
+      surface.create_entity{name = gate_name, position = {position[1],position[2]}, direction = 2, force = force}
     else
-      surface.create_entity{name = "stone-wall", position = {position[1],position[2]}, force = force}
+      surface.create_entity{name = wall_name, position = {position[1],position[2]}, force = force}
     end
   end
   surface.set_tiles(tiles)
@@ -2304,6 +2442,7 @@ button_press_functions = {
   ["join_spectator"] = function(event) event.element.parent.destroy() spectator_join(game.players[event.player_index]) end,
   ["objective_button"] = objective_button_press,
   ["oil_harvest_button"] = oil_harvest_button_press,
+  ["space_race_button"] = space_race_button_press,
   ["production_score_button"] = production_score_button_press,
   ["random_join_button"] = function(event) event.element.parent.destroy() random_join(game.players[event.player_index]) end,
   ["production_score_calculator_button"] = prodcalc.button_press,
@@ -2390,12 +2529,13 @@ function duplicate_starting_area_entities()
 end
 
 function check_spectator_chart()
-  if not global.game_config.allow_spectators then return end
   if global.game_config.spectator_fog_of_war then return end
   if game.tick % 281 ~= 0 then return end
   local force = game.forces.spectator
   if not (force and force.valid) then return end
-  force.chart_all(global.surface)
+  if #force.connected_players > 0 then
+    force.chart_all(global.surface)
+  end
 end
 
 function create_starting_chest(force)
@@ -2408,6 +2548,10 @@ function create_starting_chest(force)
   if not inventory then return end
   local surface = global.surface
   local chest_name = "steel-chest"
+  if not game.entity_prototypes[chest_name] then
+    log("Starting chest not created as "..chest_name.." is not a valid entity prototype")
+    return
+  end
   local origin = force.get_spawn_position(surface)
   local position = surface.find_non_colliding_position(chest_name, origin, 100, 0.5)
   if not position then return end
@@ -2644,12 +2788,14 @@ end
 
 pvp.on_rocket_launched = function(event)
   production_score.on_rocket_launched(event)
-  local launch_victory = {
-    conquest = true,
-    space_race = true,
-    freeplay = true
-  }
-  if not launch_victory[global.game_config.game_mode.selected] then return end
+  local mode = global.game_config.game_mode.selected
+  if mode == "freeplay" then
+    if silo_script then
+      silo_script.on_rocket_launched(event)
+    end
+    return
+  end
+  if mode ~= "conquest" then return end
   local force = event.rocket.force
   if event.rocket.get_item_count("satellite") == 0 then
     force.print({"rocket-launched-without-satellite"})
@@ -2813,6 +2959,7 @@ pvp.on_tick = function(event)
     check_player_color()
     check_update_production_score()
     check_update_oil_harvest_score()
+    check_update_space_race_score()
     check_spectator_chart()
     check_base_exclusion()
     check_restart_round()
@@ -2832,7 +2979,7 @@ pvp.on_player_respawned = function(event)
   if global.setup_finished == true then
     give_equipment(player)
     offset_respawn_position(player)
-    pcall(apply_character_modifiers, player)
+    apply_character_modifiers(player)
   else
     if player.character then
       player.character.destroy()

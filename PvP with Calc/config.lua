@@ -45,6 +45,7 @@ function load_config(dummy_load)
     time_limit = 0,
     required_production_score = 50000000,
     required_oil_barrels = 1000,
+    required_satellites_sent = 1,
     oil_only_in_center = true,
     allow_spectators = false,
     spectator_fog_of_war = true,
@@ -119,11 +120,6 @@ function load_config(dummy_load)
       options = {"none", "small", "medium", "large"},
       selected = "none"
     },
-    starting_inventory =
-    {
-      options = {"none", "small", "medium", "large"},
-      selected = "none"
-    },
     starting_chest =
     {
       options = {"none", "small", "medium", "large"},
@@ -139,13 +135,13 @@ function load_config(dummy_load)
 
   config.colors =
   {
+    { name = "orange" , color = { r = 0.869, g = 0.5  , b = 0.130, a = 0.5 }},
+    { name = "purple" , color = { r = 0.485, g = 0.111, b = 0.659, a = 0.5 }},
     { name = "red"    , color = { r = 0.815, g = 0.024, b = 0.0  , a = 0.5 }},
     { name = "green"  , color = { r = 0.093, g = 0.768, b = 0.172, a = 0.5 }},
     { name = "blue"   , color = { r = 0.155, g = 0.540, b = 0.898, a = 0.5 }},
-    { name = "orange" , color = { r = 0.869, g = 0.5  , b = 0.130, a = 0.5 }},
     { name = "yellow" , color = { r = 0.835, g = 0.666, b = 0.077, a = 0.5 }},
     { name = "pink"   , color = { r = 0.929, g = 0.386, b = 0.514, a = 0.5 }},
-    { name = "purple" , color = { r = 0.485, g = 0.111, b = 0.659, a = 0.5 }},
     { name = "white"  , color = { r = 0.8  , g = 0.8  , b = 0.8  , a = 0.5 }},
     { name = "black"  , color = { r = 0.1  , g = 0.1  , b = 0.1,   a = 0.5 }},
     { name = "gray"   , color = { r = 0.4  , g = 0.4  , b = 0.4,   a = 0.5 }},
@@ -211,6 +207,7 @@ function load_config(dummy_load)
       ["repair-pack"] = 20,
       ["inserter"] = 150,
       ["small-electric-pole"] = 100,
+      ["medium-electric-pole"] = 50,
       ["fast-inserter"] = 50,
       ["long-handed-inserter"] = 50,
       ["burner-inserter"] = 100,
@@ -252,7 +249,6 @@ function load_config(dummy_load)
       ["assembling-machine-1"] = 50,
       ["assembling-machine-2"] = 40,
       ["assembling-machine-3"] = 20,
-      ["electronic-circuit"] = 200,
       ["fast-inserter"] = 100,
       ["long-handed-inserter"] = 100,
       ["medium-electric-pole"] = 50,
@@ -317,9 +313,8 @@ function give_equipment(player)
     armor.put({name = "exoskeleton-equipment"})
     armor.put({name = "energy-shield-equipment"})
     armor.put({name = "energy-shield-equipment"})
-    armor.put({name = "personal-roboport-equipment"})
-    player.force.worker_robots_speed_modifier = 2.5
-    player.insert{name = "construction-robot", count = 10}
+    armor.put({name = "personal-roboport-mk2-equipment"})
+    player.insert{name = "construction-robot", count = 25}
     player.insert{name = "blueprint", count = 3}
     player.insert{name = "deconstruction-planner", count = 1}
     player.insert{name = "car", count = 1}
