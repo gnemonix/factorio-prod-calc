@@ -3,6 +3,10 @@ A Factorio scenario (PvP) with an in-game production score calculator gui
 
 Latest changes:
 
+* Version 1.0.7 -- Feb. 12, 2018
+  * Fixed crash when selecting recipe with ingreadients that have a "nil" price
+  * Seperated out locale files for easier merging of upstream changes
+
 * Version 1.0.6 -- Feb. 12, 2018
   * Merged in changes from 0.16.23 release  
     key changes:
