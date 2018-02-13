@@ -129,7 +129,7 @@ production_score.generate_price_list = function(param)
     end
   end
 
-  for k, name in pairs (param.resource_ignore or {}) do
+  for name, v in pairs (param.resource_ignore or {}) do
     price_list[name] = nil
   end
 
