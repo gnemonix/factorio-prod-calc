@@ -2894,31 +2894,32 @@ pvp.on_gui_elem_changed = function(event)
     global.disabled_items = {}
   end
   local items = global.disabled_items
-  if parent.name ~= "disable_items_table" then return end
-  local value = gui.elem_value
-  if not value then
-    local map = {}
-    for k, child in pairs (parent.children) do
-      if child.elem_value then
-        map[child.elem_value] = true
+  if parent.name == "disable_items_table" then
+    local value = gui.elem_value
+    if not value then
+      local map = {}
+      for k, child in pairs (parent.children) do
+        if child.elem_value then
+          map[child.elem_value] = true
+        end
       end
-    end
-    for item, bool in pairs (items) do
-      if not map[item] then
-        items[item] = nil
+      for item, bool in pairs (items) do
+        if not map[item] then
+          items[item] = nil
+        end
       end
+      gui.destroy()
+      return
     end
-    gui.destroy()
-    return
-  end
-  if items[value] then
-    if items[value] ~= gui.index then
-      gui.elem_value = nil
-      player.print({"duplicate-disable"})
+    if items[value] then
+      if items[value] ~= gui.index then
+        gui.elem_value = nil
+        player.print({"duplicate-disable"})
+      end
+    else
+      items[value] = gui.index
+      parent.add{type = "choose-elem-button", elem_type = "item"}
     end
-  else
-    items[value] = gui.index
-    parent.add{type = "choose-elem-button", elem_type = "item"}
   end
   global.disable_items = items
 end
