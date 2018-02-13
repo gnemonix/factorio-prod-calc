@@ -571,7 +571,7 @@ function select_recipe(gui, player)
 
       select_item(button, ingr.amount)
 
-      sum_ingredients_price = sum_ingredients_price + (global.price_list[ingr.name] * ingr.amount)
+      sum_ingredients_price = sum_ingredients_price + ((global.price_list[ingr.name] or 0) * ingr.amount)
     end
     
     for iter, prod in pairs (recipe_prototype.products) do
@@ -584,7 +584,7 @@ function select_recipe(gui, player)
       local amount = (prod.amount or prod.probability * ((prod.amount_min + prod.amount_max) / 2))
       select_item(button, amount)
 
-      sum_products_price = sum_products_price + (global.price_list[prod.name] * amount)
+      sum_products_price = sum_products_price + ((global.price_list[prod.name] or 0) * amount)
     end
 
   else
