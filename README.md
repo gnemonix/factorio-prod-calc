@@ -3,6 +3,9 @@ A Factorio scenario (PvP) with an in-game production score calculator gui
 
 Latest changes:
 
+* Version 1.0.9 -- Feb. 26, 2018
+  * Merged locale files from upstream (0.16.24 - 0.16.26)
+
 * Version 1.0.8 -- Feb. 12, 2018
   * Fixed resource ignore loop. Now it works correctly for mods.
   * Fixed crash when re-rolling map after using the calc gui
