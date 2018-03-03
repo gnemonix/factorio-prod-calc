@@ -47,6 +47,7 @@ end)
 
 script.on_event(defines.events.on_gui_click, function(event)
   pvp.on_gui_click(event)
+  prodcalc.on_gui_click(event)
   silo_script.on_gui_click(event)
 end)
 

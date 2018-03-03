@@ -62,6 +62,17 @@ prodcalc.button_press = function (event)
   -- end
 end
 
+prodcalc.on_gui_click = function(event)
+  local gui = event.element
+  local player = game.players[event.player_index]
+  if not (player and player.valid and gui and gui.valid) then return end
+
+  if gui.name == "calc_export_button" then
+    export_spreadsheet(player)
+    return
+  end
+end
+
 prodcalc.on_gui_elem_changed = function(event)
   local gui = event.element
   local player = game.players[event.player_index]
@@ -149,20 +160,39 @@ function create_calc_gui(player)
   local gui = mod_gui.get_frame_flow(player)
   --local gui = player.gui.center
   
-  if gui.calc_gui then
-    gui.calc_gui.style.visible = not gui.calc_gui.style.visible
+  if gui.calc_flow then
+    gui.calc_flow.style.visible = not gui.calc_flow.style.visible
     return
   end
 
 -- MAIN CALCULATOR GUI
 
-  local frame_main = gui.add{
+  local flow_main = gui.add{
+    type = "flow",
+    name = "calc_flow",
+    direction = "vertical"
+  }
+  flow_main.style.visible = true
+
+  local frame_main = flow_main.add{
     type = "frame",
     name = "calc_gui",
     caption = {"calc-gui"},
     direction = "vertical"
   }
-  frame_main.style.visible = true
+
+  local button_flow = flow_main.add{
+    type = "flow",
+    name = "calc_button_flow",
+    direction = "horizontal"
+  }
+
+  local export_button = button_flow.add{
+    type = "button",
+    name = "calc_export_button",
+    caption = {"calc-export-label"},
+    tooltip = {"calc-export-tooltip"}
+}
 
 -- RECIPE CHOOSER
 
@@ -720,6 +750,53 @@ function round_number(number, decimal)
   end
 
   return util.format_number(math.floor((number * 10^decimal) + 0.5) / (10^decimal))
+end
+
+function export_spreadsheet(player)
+  local price_list = global.price_list
+  local prod_list = production_score.get_product_list()
+  local cost_list = {}
+  local net_gain_list = {}
+
+  for name, price in pairs (price_list) do
+    local recipe_list = prod_list[name]
+
+    local recipe_cost
+    if not recipe_list then
+      recipe_cost = 0
+    else
+      local this_recipe_cost = 0
+
+      for k, recipe in pairs (recipe_list) do
+        for ingredient, amount in pairs (recipe) do
+          if ingredient ~= "energy" then
+            this_recipe_cost = this_recipe_cost + ((price_list[ingredient] or 0) * amount)
+          end
+        end
+
+        if recipe_cost then
+          recipe_cost = math.min(recipe_cost, this_recipe_cost)
+        else
+          recipe_cost = this_recipe_cost
+        end
+      end
+    end
+
+    cost_list[name] = recipe_cost
+    net_gain_list[name] = price - recipe_cost
+  end
+
+  local out = "product\tprice\tcost\tnet gain\n"
+  local file = "prod_calc_export.txt"
+
+  for name, price in pairs (price_list) do
+    local cost = cost_list[name]
+    local gain = net_gain_list[name]
+    out = out .. name .. "\t" .. price .. "\t" .. cost .. "\t" .. gain .. "\n"
+  end
+  game.write_file(file, out, false, player.index)
+
+  player.print({"calc-export-success", file})
 end
 
 return prodcalc

@@ -256,4 +256,8 @@ production_score.on_player_crafted_item = function(event)
   end
 end
 
+production_score.get_product_list = function()
+  return get_product_list()
+end
+
 return production_score
