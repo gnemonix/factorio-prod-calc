@@ -2836,7 +2836,7 @@ disable_items_elem_changed = function(event)
     global.disabled_items = {}
   end
   local items = global.disabled_items
-  if parent.name == "disabled_items_table" then return end
+  if parent.name ~= "disable_items_table" then return end
   local value = gui.elem_value
   if not value then
     local map = {}
