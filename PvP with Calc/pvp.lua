@@ -1632,7 +1632,7 @@ function disable_items_for_all()
   end
 
   local recipes_to_disable = {}
-  for name, k in pairs (global.disable_items) do
+  for name, k in pairs (global.disabled_items) do
     local mapping = product_map[name]
     if mapping then
       for k, recipe in pairs (mapping) do
@@ -2836,7 +2836,7 @@ disable_items_elem_changed = function(event)
     global.disabled_items = {}
   end
   local items = global.disabled_items
-  if parent.name == "disable_items_table" then
+  if parent.name == "disabled_items_table" then return end
     local value = gui.elem_value
     if not value then
       local map = {}
@@ -2869,8 +2869,7 @@ disable_items_elem_changed = function(event)
         end
       end
     end
-  end
-  global.disable_items = items
+  global.disabled_items = items
 end
 
 recipe_picker_elem_changed = function(event)
