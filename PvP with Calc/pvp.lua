@@ -2859,8 +2859,15 @@ disable_items_elem_changed = function(event)
       player.print({"duplicate-disable"})
     end
   else
-    items[value] = gui.index
+    items[value] = parent.children[#parent.children].index
     parent.add{type = "choose-elem-button", elem_type = "item"}
+  end
+  for item, index in pairs(items) do
+    for k, child in pairs(parent.children) do
+      if index == child.index then
+        child.elem_value = item
+      end
+    end
   end
   end
   global.disable_items = items
