@@ -2876,6 +2876,7 @@ recipe_picker_elem_changed = function(event)
   local gui = event.element
   local player = game.players[event.player_index]
   if not (player and player.valid and gui and gui.valid) then return end
+  if gui.name ~= "recipe_picker_elem_button" then return end
   local flow = gui.parent
   local frame = flow.parent
   if frame.recipe_check_frame then
