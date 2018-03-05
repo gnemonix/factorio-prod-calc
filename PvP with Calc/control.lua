@@ -16,7 +16,6 @@ script.on_configuration_changed(function()
 end)
 
 script.on_event(defines.events.on_rocket_launched, function (event)
-  silo_script.on_rocket_launched(event)
   pvp.on_rocket_launched(event)
 end)
 

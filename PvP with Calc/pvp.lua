@@ -825,31 +825,30 @@ function set_teams_from_gui(player)
   local duplicates = {}
   local team_table = gui.team_config_gui_inner_frame.team_config_gui_scroll.team_table
   local children = team_table.children
-  local index = 1
-  local element = team_table[index]
-  while element and element.valid do
-    local text = element.text
-    if disallow[text] then
-      player.print({"disallowed-team-name", text})
-      return
+  for index = 1, 25 do
+    local element = team_table[index]
+    if element and element.valid then
+      local text = element.text
+      if disallow[text] then
+        player.print({"disallowed-team-name", text})
+        return
+      end
+      if text == "" then
+        player.print({"empty-team-name"})
+        return
+      end
+      if duplicates[text] then
+        player.print({"duplicate-team-name", text})
+        return
+      end
+      duplicates[text] = true
+      local team = {}
+      team.name = text
+      team.color = global.colors[team_table[index.."_color"].selected_index].name
+      local caption = team_table[index.."_next_team_button"].caption
+      team.team = tonumber(caption) or caption
+      table.insert(teams, team)
     end
-    if text == "" then
-      player.print({"empty-team-name"})
-      return
-    end
-    if duplicates[text] then
-      player.print({"duplicate-team-name", text})
-      return
-    end
-    duplicates[text] = true
-    local team = {}
-    team.name = text
-    team.color = global.colors[team_table[index.."_color"].selected_index].name
-    local caption = team_table[index.."_next_team_button"].caption
-    team.team = tonumber(caption) or caption
-    table.insert(teams, team)
-    index = index + 1
-    element = team_table[index]
   end
   if #teams > 24 then
     player.print({"too-many-teams", 24})
@@ -1221,6 +1220,10 @@ function production_score_button_press(event)
   inner_frame.style.top_padding = 8
   inner_frame.style.right_padding = 8
   inner_frame.style.bottom_padding = 8
+  local flow = frame.add{type = "flow", direction = "horizontal"}
+  flow.add{type = "label", caption = {"", {"recipe-calculator"}, {"colon"}}}
+  flow.add{type = "choose-elem-button", name = "recipe_picker_elem_button", elem_type = "recipe"}
+  flow.style.vertical_align = "center"
   update_production_score_frame(player)
 end
 
@@ -1818,7 +1821,7 @@ function check_starting_area_chunks_are_generated()
     game.speed = 1
     global.check_starting_area_generation = false
     global.finish_setup = game.tick +(#global.teams)
-    update_progress_bar(true)
+    update_progress_bar()
     return
   end
   update_progress_bar()
@@ -2146,7 +2149,7 @@ function create_silo_for_force(force)
       table.insert(tiles_2, {name = tile_name, position = {silo_position.x + X, silo_position.y + Y}})
     end
   end
-  surface.set_tiles(tiles_2)
+  set_tiles_safe(surface, tiles_2)
 end
 
 function setup_research(force)
@@ -2220,7 +2223,7 @@ function create_starting_turrets(force)
     table.insert(tiles, {name = tile_name, position = {x = position.x, y = position.y - 1}})
     table.insert(tiles, {name = tile_name, position = {x = position.x - 1, y = position.y - 1}})
   end
-  surface.set_tiles(tiles)
+  set_tiles_safe(surface, tiles)
 end
 
 function create_starting_artillery(force)
@@ -2290,7 +2293,7 @@ function create_starting_artillery(force)
       end
     end
   end
-  surface.set_tiles(tiles)
+  set_tiles_safe(surface, tiles)
 end
 
 function create_wall_for_force(force)
@@ -2383,7 +2386,7 @@ function create_wall_for_force(force)
       surface.create_entity{name = wall_name, position = {position[1],position[2]}, force = force}
     end
   end
-  surface.set_tiles(tiles)
+  set_tiles_safe(surface, tiles)
 end
 
 function spairs(t, order)
@@ -2429,23 +2432,23 @@ function oil_harvest_prune_oil(event)
 end
 
 button_press_functions = {
-  ["add_team_button"] = add_team_button_press,
-  ["admin_button"] = admin_button_press,
-  ["auto_assign_button"] = function(event) event.element.parent.destroy() auto_assign(game.players[event.player_index]) end,
-  ["balance_options_cancel"] = function(event) toggle_balance_options_gui(game.players[event.player_index]) end,
-  ["balance_options_confirm"] = function(event) local player = game.players[event.player_index]  if set_balance_settings(player) then toggle_balance_options_gui(player) end end,
-  ["balance_options"] = function(event) toggle_balance_options_gui(game.players[event.player_index]) end,
-  ["config_confirm"] = function(event) config_confirm(event.element) end,
-  ["diplomacy_button"] = diplomacy_button_press,
-  ["diplomacy_cancel"] = function(event) game.players[event.player_index].opened.destroy() end,
-  ["diplomacy_confirm"] = diplomacy_confirm,
-  ["join_spectator"] = function(event) event.element.parent.destroy() spectator_join(game.players[event.player_index]) end,
-  ["objective_button"] = objective_button_press,
-  ["oil_harvest_button"] = oil_harvest_button_press,
-  ["space_race_button"] = space_race_button_press,
-  ["production_score_button"] = production_score_button_press,
-  ["random_join_button"] = function(event) event.element.parent.destroy() random_join(game.players[event.player_index]) end,
-  ["production_score_calculator_button"] = prodcalc.button_press,
+  add_team_button = add_team_button_press,
+  admin_button = admin_button_press,
+  auto_assign_button = function(event) event.element.parent.destroy() auto_assign(game.players[event.player_index]) end,
+  balance_options_cancel = function(event) toggle_balance_options_gui(game.players[event.player_index]) end,
+  balance_options_confirm = function(event) local player = game.players[event.player_index]  if set_balance_settings(player) then toggle_balance_options_gui(player) end end,
+  balance_options = function(event) toggle_balance_options_gui(game.players[event.player_index]) end,
+  config_confirm = function(event) config_confirm(event.element) end,
+  diplomacy_button = diplomacy_button_press,
+  diplomacy_cancel = function(event) game.players[event.player_index].opened.destroy() end,
+  diplomacy_confirm = diplomacy_confirm,
+  join_spectator = function(event) event.element.parent.destroy() spectator_join(game.players[event.player_index]) end,
+  objective_button = objective_button_press,
+  oil_harvest_button = oil_harvest_button_press,
+  space_race_button = space_race_button_press,
+  production_score_button = production_score_button_press,
+  random_join_button = function(event) event.element.parent.destroy() random_join(game.players[event.player_index]) end,
+  production_score_calculator_button = prodcalc.button_press
 }
 
 function duplicate_starting_area_entities()
@@ -2548,26 +2551,90 @@ function create_starting_chest(force)
   if not inventory then return end
   local surface = global.surface
   local chest_name = "steel-chest"
-  if not game.entity_prototypes[chest_name] then
-    log("Starting chest not created as "..chest_name.." is not a valid entity prototype")
-    return
+  local prototype = game.entity_prototypes[chest_name]
+  if not prototype then
+    log("Starting chest "..chest_name.." is not a valid entity prototype, picking a new container from prototype list")
+    for name, chest in pairs (game.entity_prototypes) do
+      if chest.type == "container" then
+        chest_name = name
+        prototype = chest
+        break
+      end
+    end
   end
+  local bounding_box = prototype.collision_box
+  local size = math.ceil(math.max(bounding_box.right_bottom.x - bounding_box.left_top.x, bounding_box.right_bottom.y - bounding_box.left_top.y))
   local origin = force.get_spawn_position(surface)
-  local position = surface.find_non_colliding_position(chest_name, origin, 100, 0.5)
-  if not position then return end
+  origin.y = origin.y + 8
+  local index = 1
+  local position = {x = origin.x + get_chest_offset(index).x * size, y = origin.y + get_chest_offset(index).y * size}
   local chest = surface.create_entity{name = chest_name, position = position, force = force}
+  for k, v in pairs (surface.find_entities_filtered{force = "neutral", area = chest.bounding_box}) do
+    v.destroy()
+  end
+  local tiles = {}
+  local grass = {}
+  table.insert(tiles, {name = "concrete", position = {x = position.x, y = position.y}})
   chest.destructible = false
   for name, count in pairs (inventory) do
     local count_to_insert = math.ceil(count*multiplier)
     local difference = count_to_insert - chest.insert{name = name, count = count_to_insert}
     while difference > 0 do
-      position = surface.find_non_colliding_position(chest_name, origin, 100, 0.5)
-      if not position then return end
+      index = index + 1
+      position = {x = origin.x + get_chest_offset(index).x * size, y = origin.y + get_chest_offset(index).y * size}
       chest = surface.create_entity{name = chest_name, position = position, force = force}
+      for k, v in pairs (surface.find_entities_filtered{force = "neutral", area = chest.bounding_box}) do
+        v.destroy()
+      end
+      table.insert(tiles, {name = "concrete", position = {x = position.x, y = position.y}})
       chest.destructible = false
       difference = difference - chest.insert{name = name, count = difference}
     end
   end
+  set_tiles_safe(surface, tiles)
+end
+
+function get_chest_offset(n)
+  local offset_x = 0
+  n = n/2
+  if n % 1 == 0.5 then
+    offset_x = -1
+    n = n + 0.5
+  end
+  local root = n^0.5
+  local nearest_root = math.floor(root+0.5)
+  local upper_root = math.ceil(root)
+  local root_difference = math.abs(nearest_root^2 - n)
+  if nearest_root == upper_root then
+    x = upper_root - root_difference
+    y = nearest_root
+  else
+    x = upper_root
+    y = root_difference
+  end
+  local orientation = 2 * math.pi * (45/360)
+  x = x * (2^0.5)
+  y = y * (2^0.5)
+  local rotated_x = math.floor(0.5 + x * math.cos(orientation) - y * math.sin(orientation))
+  local rotated_y = math.floor(0.5 + x * math.sin(orientation) + y * math.cos(orientation))
+  return {x = rotated_x + offset_x, y = rotated_y}
+end
+
+function set_tiles_safe(surface, tiles)
+  local grass
+  for name, tile in pairs (game.tile_prototypes) do
+    if tile.collision_mask["resource-layer"] == nil and not tile.items_to_place_this then
+      grass = name
+      break
+    end
+  end
+  if not grass then error("Well, you can woop de doop ur mom") end
+  local grass_tiles = {}
+  for k, tile in pairs (tiles) do
+    grass_tiles[k] = {position = {x = (tile.position.x or tile.position[1]), y = (tile.position.y or tile.position[2])}, name = grass}
+  end
+  surface.set_tiles(grass_tiles, false)
+  surface.set_tiles(tiles)
 end
 
 function check_base_exclusion()
@@ -2760,6 +2827,163 @@ check_cursor_for_disabled_items = function(event)
   end
 end
 
+disable_items_elem_changed = function(event)
+  local gui = event.element
+  local player = game.players[event.player_index]
+  if not (player and player.valid and gui and gui.valid) then return end
+  local parent = gui.parent
+  if not global.disabled_items then
+    global.disabled_items = {}
+  end
+  local items = global.disabled_items
+  if parent.name ~= "disable_items_table" then return end
+  local value = gui.elem_value
+  if not value then
+    local map = {}
+    for k, child in pairs (parent.children) do
+      if child.elem_value then
+        map[child.elem_value] = true
+      end
+    end
+    for item, bool in pairs (items) do
+      if not map[item] then
+        items[item] = nil
+      end
+    end
+    gui.destroy()
+    return
+  end
+  if items[value] then
+    if items[value] ~= gui.index then
+      gui.elem_value = nil
+      player.print({"duplicate-disable"})
+    end
+  else
+    items[value] = gui.index
+    parent.add{type = "choose-elem-button", elem_type = "item"}
+  end
+  global.disable_items = items
+end
+
+recipe_picker_elem_changed = function(event)
+  local gui = event.element
+  local player = game.players[event.player_index]
+  if not (player and player.valid and gui and gui.valid) then return end
+  local flow = gui.parent
+  local frame = flow.parent
+  if frame.recipe_check_frame then
+    frame.recipe_check_frame.destroy()
+  end
+  if gui.elem_value == nil then
+    return
+  end
+  local recipe = player.force.recipes[gui.elem_value]
+  local recipe_frame = frame.add{type = "frame", direction = "vertical", style = "image_frame", name = "recipe_check_frame"}
+  local title_flow = recipe_frame.add{type = "flow"}
+  title_flow.style.align = "center"
+  title_flow.style.horizontally_stretchable = true
+  title_flow.add{type = "label", caption = recipe.localised_name, style = "frame_caption_label"}
+  local table = recipe_frame.add{type = "table", column_count = 2}
+  table.draw_horizontal_line_after_headers = true
+  table.draw_vertical_lines = true
+  table.style.horizontal_spacing = 16
+  table.style.vertical_spacing = 2
+  table.style.left_padding = 4
+  table.style.right_padding = 4
+  table.style.top_padding = 4
+  table.style.bottom_padding = 4
+  table.style.column_alignments[1] = "center"
+  table.style.column_alignments[2] = "center"
+  table.add{type = "label", caption = {"ingredients"}, style = "bold_label"}
+  table.add{type = "label", caption = {"products"}, style = "bold_label"}
+  local ingredients = recipe.ingredients
+  local products = recipe.products
+  local prices = global.price_list
+  local cost = 0
+  local gain = 0
+  local prototypes = {
+    fluid = game.fluid_prototypes,
+    item = game.item_prototypes
+  }
+  for k = 1, math.max(#ingredients, #products) do
+    local ingredient = ingredients[k]
+    local flow = table.add{type = "flow", direction = "horizontal"}
+    if k == 1 then
+      flow.style.top_padding = 8
+    end
+    flow.style.vertical_align = "center"
+    if ingredient then
+      flow.add
+      {
+        type = "sprite-button",
+        sprite = ingredient.type.."/"..ingredient.name,
+        number = ingredient.amount,
+        style = "slot_button",
+        tooltip = {"", "1 x ", prototypes[ingredient.type][ingredient.name].localised_name, " = ", util.format_number(math.floor(prices[ingredient.name] * 100) / 100)},
+      }
+      local price = ingredient.amount * prices[ingredient.name] or 0
+      add_pusher(flow)
+      flow.add{type = "label", caption = util.format_number(math.floor(price * 100) / 100)}
+      cost = cost + price
+    end
+    local product = products[k]
+    flow = table.add{type = "flow", direction = "horizontal"}
+    if k == 1 then
+      flow.style.top_padding = 8
+    end
+    flow.style.vertical_align = "center"
+    if product then
+      local amount = product.amount or product.probability * (product.amount_max + product.amount_min) / 2 or 0
+      flow.add
+      {
+        type = "sprite-button",
+        sprite = product.type.."/"..product.name,
+        number = amount,
+        style = "slot_button",
+        tooltip = {"", "1 x ", prototypes[product.type][product.name].localised_name, " = ", util.format_number(math.floor(prices[product.name] * 100) / 100)},
+        show_percent_for_small_numbers = true
+      }
+      add_pusher(flow)
+      local price = amount * prices[product.name] or 0
+      flow.add{type = "label", caption = util.format_number(math.floor(price * 100) / 100)}
+      gain = gain + price
+    end
+  end
+  local line = table.add{type = "table", column_count = 1}
+  line.draw_horizontal_lines = true
+  add_pusher(line)
+  add_pusher(line)
+  line.style.top_padding = 8
+  line.style.bottom_padding = 4
+  local line = table.add{type = "table", column_count = 1}
+  line.draw_horizontal_lines = true
+  add_pusher(line)
+  add_pusher(line)
+  line.style.top_padding = 8
+  line.style.bottom_padding = 4
+  local cost_flow = table.add{type = "flow"}
+  cost_flow.add{type = "label", caption = {"", {"cost"}, {"colon"}}}
+  add_pusher(cost_flow)
+  cost_flow.add{type = "label", caption = util.format_number(math.floor(cost * 100) / 100)}
+  local gain_flow = table.add{type = "flow"}
+  gain_flow.add{type = "label", caption = {"", {"gain"}, {"colon"}}}
+  add_pusher(gain_flow)
+  gain_flow.add{type = "label", caption = util.format_number(math.floor(gain * 100) / 100)}
+  table.add{type = "flow"}
+  local total_flow = table.add{type = "flow"}
+  total_flow.add{type = "label", caption = {"", {"total"}, {"colon"}}, style = "bold_label"}
+  add_pusher(total_flow)
+  local total = total_flow.add{type = "label", caption = util.format_number(math.floor((gain-cost) * 100) / 100), style = "bold_label"}
+  if cost > gain then
+    total.style.font_color = {r = 1, g = 0.3, b = 0.3}
+  end
+end
+
+function add_pusher(gui)
+  local pusher = gui.add{type = "flow"}
+  pusher.style.horizontally_stretchable = true
+end
+
 pvp = {}
 
 pvp.on_init = function()
@@ -2886,49 +3110,8 @@ pvp.on_player_left_game = function(event)
 end
 
 pvp.on_gui_elem_changed = function(event)
-  local gui = event.element
-  local player = game.players[event.player_index]
-  if not (player and player.valid and gui and gui.valid) then return end
-  local parent = gui.parent
-  if not global.disabled_items then
-    global.disabled_items = {}
-  end
-  local items = global.disabled_items
-  if parent.name == "disable_items_table" then
-    local value = gui.elem_value
-    if not value then
-      local map = {}
-      for k, child in pairs (parent.children) do
-        if child.elem_value then
-          map[child.elem_value] = true
-        end
-      end
-      for item, bool in pairs (items) do
-        if not map[item] then
-          items[item] = nil
-        end
-      end
-      gui.destroy()
-      return
-    end
-    if items[value] then
-      if items[value] ~= gui.index then
-        gui.elem_value = nil
-        player.print({"duplicate-disable"})
-      end
-    else
-      items[value] = parent.children[#parent.children].index
-      parent.add{type = "choose-elem-button", elem_type = "item"}
-    end
-    for item, index in pairs(items) do
-      for k, child in pairs(parent.children) do
-        if index == child.index then
-          child.elem_value = item
-        end
-      end
-    end
-  end
-  global.disable_items = items
+  disable_items_elem_changed(event)
+  recipe_picker_elem_changed(event)
 end
 
 pvp.on_gui_click = function(event)
