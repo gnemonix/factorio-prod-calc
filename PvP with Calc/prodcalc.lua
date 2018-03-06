@@ -757,42 +757,58 @@ function export_spreadsheet(player)
   local prod_list = production_score.get_product_list()
   local cost_list = {}
   local net_gain_list = {}
+  local time_list = {}
 
   for name, price in pairs (price_list) do
     local recipe_list = prod_list[name]
 
     local recipe_cost
+    local recipe_time = 0
     if not recipe_list then
       recipe_cost = 0
     else
       local this_recipe_cost = 0
+      local this_recipe_time = 0
 
       for k, recipe in pairs (recipe_list) do
         for ingredient, amount in pairs (recipe) do
           if ingredient ~= "energy" then
             this_recipe_cost = this_recipe_cost + ((price_list[ingredient] or 0) * amount)
+          else
+            this_recipe_time = amount
           end
         end
 
         if recipe_cost then
-          recipe_cost = math.min(recipe_cost, this_recipe_cost)
+          if this_recipe_cost < recipe_cost then
+            recipe_cost = this_recipe_cost
+            recipe_time = this_recipe_time
+          end
         else
           recipe_cost = this_recipe_cost
+          recipe_time = this_recipe_time
         end
       end
     end
 
+    local entity = game.entity_prototypes[name]
+    if entity then
+      recipe_time = entity.mineable_properties.mining_time or -1
+    end
+
     cost_list[name] = recipe_cost
     net_gain_list[name] = price - recipe_cost
+    time_list[name] = recipe_time
   end
 
-  local out = "product\tprice\tcost\tnet gain\n"
+  local out = "product\tprice\tcost\tnet gain\tbase craft time\n"
   local file = "prod_calc_export.txt"
 
   for name, price in pairs (price_list) do
     local cost = cost_list[name]
     local gain = net_gain_list[name]
-    out = out .. name .. "\t" .. price .. "\t" .. cost .. "\t" .. gain .. "\n"
+    local time = time_list[name]
+    out = out .. name .. "\t" .. price .. "\t" .. cost .. "\t" .. gain .. "\t" .. time .. "\n"
   end
   game.write_file(file, out, false, player.index)
 
