@@ -764,6 +764,12 @@ function export_spreadsheet(player)
 
     local recipe_cost
     local recipe_time = 0
+
+    local entity = game.entity_prototypes[name]
+    if entity then
+      recipe_time = entity.mineable_properties.mining_time or -1
+    end
+    
     if not recipe_list then
       recipe_cost = 0
     else
@@ -789,11 +795,6 @@ function export_spreadsheet(player)
           recipe_time = this_recipe_time
         end
       end
-    end
-
-    local entity = game.entity_prototypes[name]
-    if entity then
-      recipe_time = entity.mineable_properties.mining_time or -1
     end
 
     cost_list[name] = recipe_cost
